@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="en-AU">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Family Buyer Intel</title>
+<link rel="stylesheet" href="src/styles.css">
+</head>
+<body>
+<header class="topbar">
+  <div class="brand">
+    <span class="mark"></span>
+    <div>
+      <h1>Family Buyer Intel</h1>
+      <p>Sunshine Coast · 4-bedroom family brief</p>
+    </div>
+  </div>
+  <div class="mode" id="mode-pill"></div>
+</header>
+
+<div class="areabar">
+  <span class="areabar-label">Search area</span>
+  <label>Centred on <select id="a-anchor"></select></label>
+  <label>Within
+    <input type="range" id="a-radius" min="2" max="35" step="1" value="10">
+    <output id="a-radius-out">10km</output>
+  </label>
+  <span class="areabar-summary" id="a-summary"></span>
+</div>
+
+<nav class="tabs" role="tablist">
+  <button role="tab" class="tab active" data-view="suburbs">Suburbs</button>
+  <button role="tab" class="tab" data-view="listings">Inventory</button>
+  <button role="tab" class="tab" data-view="sources">Data sources</button>
+</nav>
+
+<main id="main">
+  <section id="view-suburbs" class="view">
+    <div class="toolbar">
+      <label>Rank by
+        <select id="sort-suburbs">
+          <option value="opportunity">Opportunity score</option>
+          <option value="distance">Distance from centre</option>
+          <option value="lifestyle">Family lifestyle</option>
+          <option value="pressure">Buyer choice</option>
+          <option value="tightlyHeld">Tightly held</option>
+          <option value="searchMonths">Expected search time</option>
+          <option value="shadow">Coming-soon pipeline</option>
+        </select>
+      </label>
+      <p class="hint">Opportunity blends buyer choice, hidden pipeline, lifestyle fit and turnover outlook.</p>
+    </div>
+    <div id="suburb-grid" class="grid"></div>
+  </section>
+
+  <section id="view-listings" class="view hidden">
+    <div class="filters">
+      <label>Suburb <select id="f-suburb"></select></label>
+      <label>Status
+        <select id="f-status">
+          <option value="all">All</option>
+          <option value="on-market">On market</option>
+          <option value="coming-soon">Coming soon</option>
+          <option value="signal">Early signal</option>
+        </select>
+      </label>
+      <label>Min beds <select id="f-beds"><option>3</option><option selected>4</option><option>5</option></select></label>
+      <label>Min lot m² <select id="f-lot"><option value="0">Any</option><option value="500">500</option><option value="600" selected>600</option><option value="800">800</option></select></label>
+      <label>Max price <select id="f-price">
+        <option value="0">Any</option><option value="900000">$900k</option>
+        <option value="1100000">$1.1m</option><option value="1300000">$1.3m</option><option value="1500000">$1.5m</option>
+      </select></label>
+      <label class="check"><input type="checkbox" id="f-study"> Has study</label>
+      <label class="check"><input type="checkbox" id="f-pool"> Has pool</label>
+      <label class="check"><input type="checkbox" id="f-poolready" checked> Pool-capable</label>
+      <label class="check"><input type="checkbox" id="f-outside"> Include outside area</label>
+      <button id="f-reset" class="ghost">Reset</button>
+    </div>
+    <p class="count" id="listing-count"></p>
+    <div id="listing-list" class="list"></div>
+  </section>
+
+  <section id="view-sources" class="view hidden">
+    <div id="sources-panel"></div>
+  </section>
+</main>
+
+<div id="drawer" class="drawer hidden" role="dialog" aria-modal="true">
+  <div class="drawer-inner">
+    <button id="drawer-close" class="close" aria-label="Close">&times;</button>
+    <div id="drawer-body"></div>
+  </div>
+</div>
+
+<script type="module" src="src/app.js"></script>
+</body>
+</html>

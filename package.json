@@ -1,0 +1,17 @@
+{
+  "name": "family-buyer-intel",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Suburb and property intelligence for family buyers: inventory, tenure, expansion potential and lifestyle overlays.",
+  "scripts": {
+    "start": "node server.js",
+    "start:live": "node --env-file=.env server.js",
+    "verify": "node --env-file=.env scripts/verify-addresses.mjs",
+    "verify:keyless": "node scripts/verify-addresses.mjs --provider=nominatim",
+    "enrich": "node --env-file=.env scripts/enrich-amenities.mjs"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
