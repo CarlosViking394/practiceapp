@@ -1,0 +1,11 @@
+{
+  "header": { "suburb": "Currimundi", "state": "QLD", "postcode": "4551", "propertyCategory": "house", "bedrooms": 4 },
+  "series": {
+    "seriesInfo": [
+      { "year": 2025, "month": 9, "values": { "medianSoldPrice": 985000, "numberSold": 24, "daysOnMarket": 38, "auctionClearanceRate": 0 } },
+      { "year": 2025, "month": 12, "values": { "medianSoldPrice": 1005000, "numberSold": 19, "daysOnMarket": 35, "auctionClearanceRate": 0 } },
+      { "year": 2026, "month": 3, "values": { "medianSoldPrice": 1020000, "numberSold": 27, "daysOnMarket": 31, "auctionClearanceRate": 0 } },
+      { "year": 2026, "month": 6, "values": { "medianSoldPrice": 1062000, "numberSold": 22, "daysOnMarket": 29, "auctionClearanceRate": 0 } }
+    ]
+  }
+}

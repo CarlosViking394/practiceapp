@@ -8,14 +8,79 @@ and *does this house have room to grow*.
 
 ```bash
 npm start                 # → http://localhost:4173, seed data
+npm test                  # offline tests for the Domain mappings — no credentials needed
 npm run verify:keyless    # check every address really exists (no API key needed)
-npm run start:live        # with .env supplying GOOGLE_MAPS_API_KEY
+
+# with credentials in .env:
+npm run sync              # pull real listings, pricing and demographics from Domain
+npm run sync:tenure       # ...and per-property sale history for tenure
+npm run start:live        # serve with Google endpoints enabled
 npm run enrich            # replace lifestyle figures with real Google Places data
 ```
 
 No dependencies, no build step. Node 20+ (uses ES modules, `node:` imports and
 `--env-file`). The app must be served over HTTP — ES module imports are blocked
 on `file://`.
+
+## Domain integration
+
+`npm run sync` replaces the fabricated listings with real ones. It writes
+`src/data/live/`, and the app prefers live data over seed data **per suburb and
+per field** — so a partial sync degrades field by field rather than all at once.
+Suburbs that synced show a "N live fields" chip and name them; suburbs that did
+not still say plainly that their figures are fabricated.
+
+### What Domain actually covers
+
+| Requirement | Domain endpoint | Status |
+|---|---|---|
+| Active listings, price, beds, land area | `POST /v1/listings/residential/_search` | wired |
+| Median price, days on market, sale counts | `GET /v2/suburbPerformanceStatistics/…` | wired |
+| Sale history → tenure | `GET /v1/properties/{id}` | wired (`--tenure`) |
+| Owner-occupier ratio | `GET /v2/demographics/…` | wired |
+| **Withdrawal rate** | — | **no endpoint** |
+| **Coming-soon / early intent signals** | — | **no endpoint**, needs agency CRM |
+| **Rental vacancy rate** | — | SQM Research or REIQ |
+| **Owner age profile** | — | ABS Census DataPacks |
+| **Zoning, easements, slope, heritage** | — | council spatial services |
+| **School catchment boundaries** | — | QLD EdMap |
+
+`src/data/provenance.js` holds this mapping as data, so the UI labels each figure
+from the same source of truth the README quotes.
+
+### Auth
+
+OAuth2 client credentials. `POST https://auth.domain.com.au/v1/connect/token`
+with `Authorization: Basic base64(client_id:client_secret)` and
+`grant_type=client_credentials`. The token is cached for its `expires_in` (minus
+60s) and sent as `Authorization: Bearer {token}` — both the header name and the
+`Bearer` prefix are case sensitive.
+
+Scopes used: `api_listings_read`, `api_properties_read`,
+`api_suburbperformance_read`, `api_demographics_read`. A scope outside your plan
+returns **400 invalid_scope**, which reads like an auth failure but is a
+subscription problem — `src/server/domain.js` names it explicitly.
+
+### Two details that will bite you
+
+**`dateListed` has no timezone and means Sydney time.** Parsing it as UTC shifts
+every listing by 10–11 hours and silently rounds days-on-market the wrong way.
+`parseSydneyDate()` handles AEST/AEDT including the October and April DST
+boundaries, and it is covered by tests.
+
+**Search caps at 1000 results.** `searchResidential()` paginates at 200 and stops
+there; past that the query has to narrow rather than page on.
+
+Sale history is one request per property, so `--tenure` is opt-in — it burns
+quota fast on a free tier.
+
+### Why Domain and not PropTrack
+
+Domain has a self-serve developer portal: create a project and you get Agents &
+Listings plus Properties & Locations immediately. PropTrack (REA Group) is not
+self-serve — it requires a commercial agreement before you get any access at
+all. There is no PropTrack adapter here for that reason; `.env.example` notes it
+rather than pretending otherwise.
 
 ## What Google can and cannot supply
 
@@ -28,9 +93,9 @@ Domain or PropTrack, the ABS, and council spatial services.
 
 | Requirement | Google covers it? | Actual source |
 |---|---|---|
-| 1 · Listings, DOM, withdrawals | **No** | Domain / PropTrack |
-| 1 · Early intent signals | **No** | Agency CRM, inspection bookings |
-| 2 · Tenure, owner-occupier ratio | **No** | Domain sales history, ABS Census |
+| 1 · Listings, DOM | **No** | Domain — **now wired** |
+| 1 · Withdrawal rate, early signals | **No** | Agency CRM — no public API |
+| 2 · Tenure, owner-occupier ratio | **No** | Domain — **now wired** |
 | 3 · Lot size, zoning, easements | **No** | Council spatial services |
 | 3 · Bedrooms, study, pool | **No** | Listing feed |
 | 4 · Parks, playgrounds, childcare | **Yes** | Places API (New) |
@@ -230,7 +295,11 @@ src/adapters/index.js the only module that knows where data comes from
 src/geo.js            haversine, anchors, radius coverage
 src/server/google.js  Google Maps Platform client (server-side, holds the key)
 src/server/geocode.js geocoding providers: google | nominatim
-scripts/              verify-addresses.mjs, enrich-amenities.mjs
+src/server/domain.js  Domain API client — OAuth2, pagination, retry
+src/server/domain-normalise.js  Domain payloads → our shapes (unit tested)
+src/data/provenance.js which fields have a real source, and which do not
+fixtures/             recorded Domain payloads for the offline tests
+scripts/              sync-domain, verify-addresses, enrich-amenities, test-normalisers
 src/data/             seed datasets: 12 suburbs, 36 properties
 ```
 
@@ -245,5 +314,7 @@ Verified by `npm run verify:keyless` on the current data:
 - **All market data is fabricated** — prices, DOM, tenure, lot sizes, zoning,
   signals. Plausible for the Sunshine Coast corridor, not observed.
 
-Nothing here should be quoted to a client. The app is wired for real data; it
-does not yet contain any.
+Nothing here should be quoted to a client until `npm run sync` has run. The app
+is wired for real data and reports honestly whether it has any: the mode pill
+reads "Live · N Domain listings" once synced, and "Seed data · not synced"
+until then.

@@ -1,0 +1,27 @@
+{
+  "type": "PropertyListing",
+  "listing": {
+    "id": 2019283746,
+    "listingType": "Sale",
+    "dateListed": "2026-07-14T09:30:00",
+    "priceDetails": { "displayPrice": "Offers over $1,100,000", "price": 1100000 },
+    "propertyDetails": {
+      "propertyId": "QQ-1234",
+      "state": "QLD",
+      "suburb": "Currimundi",
+      "postcode": "4551",
+      "displayableAddress": "31 Buderim Street, Currimundi",
+      "streetNumber": "31",
+      "street": "Buderim Street",
+      "propertyType": "House",
+      "bedrooms": 4,
+      "bathrooms": 2,
+      "carspaces": 2,
+      "landArea": 708,
+      "buildingArea": 181,
+      "latitude": -26.7731,
+      "longitude": 153.1267,
+      "features": ["Study", "SwimmingPool", "AirConditioning"]
+    }
+  }
+}

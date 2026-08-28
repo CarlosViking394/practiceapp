@@ -8,6 +8,8 @@ import { readFile } from 'node:fs/promises';
 import { extname, join, normalize } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { validateAddress, nearbyAmenities, travelTimes, hasKey } from './src/server/google.js';
+import { searchResidential, getSuburbPerformance, hasCredentials } from './src/server/domain.js';
+import { normaliseListing, normaliseSuburbPerformance } from './src/server/domain-normalise.js';
 
 const ROOT = fileURLToPath(new URL('.', import.meta.url));
 const PORT = Number(process.argv[2] ?? process.env.PORT ?? 4173);
@@ -32,8 +34,40 @@ async function handleApi(url, res) {
   const route = url.pathname.replace(/^\/api\//, '');
 
   if (route === 'status') {
-    return json(res, 200, { google: hasKey() ? 'configured' : 'no-key', mode: hasKey() ? 'live' : 'seed' });
+    return json(res, 200, {
+      google: hasKey() ? 'configured' : 'no-key',
+      domain: hasCredentials() ? 'configured' : 'no-credentials',
+      mode: hasKey() || hasCredentials() ? 'live' : 'seed',
+    });
   }
+
+  // Domain-backed routes, for querying without a full re-sync.
+  if (route === 'listings' || route === 'suburb-performance') {
+    if (!hasCredentials()) {
+      return json(res, 503, { error: 'DOMAIN_CLIENT_ID and DOMAIN_CLIENT_SECRET are not set. See .env.example' });
+    }
+    try {
+      const state = url.searchParams.get('state');
+      const suburb = url.searchParams.get('suburb');
+      const postcode = url.searchParams.get('postcode') ?? '';
+      if (!state || !suburb) return json(res, 400, { error: 'state and suburb query parameters are required' });
+
+      if (route === 'listings') {
+        const raw = await searchResidential({
+          state, suburb, postcode,
+          minBedrooms: Number(url.searchParams.get('minBedrooms') ?? 4),
+          maxResults: Number(url.searchParams.get('limit') ?? 50),
+        });
+        return json(res, 200, raw.map((r) => normaliseListing(r)).filter(Boolean));
+      }
+      return json(res, 200, normaliseSuburbPerformance(
+        await getSuburbPerformance({ state, suburb, postcode, bedrooms: Number(url.searchParams.get('bedrooms') ?? 4) }),
+      ));
+    } catch (err) {
+      return json(res, 502, { error: err.message });
+    }
+  }
+
   if (!hasKey()) {
     return json(res, 503, { error: 'GOOGLE_MAPS_API_KEY is not set. Start with: node --env-file=.env server.js' });
   }

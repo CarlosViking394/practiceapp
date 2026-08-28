@@ -98,7 +98,7 @@ await writeFile(reportPath, JSON.stringify({
   },
   results,
 }, null, 2));
-console.log(`\nreport → ${reportPath.pathname}`);
+console.log(`\nreport → ${reportPath}`);
 
 if (write) {
   const usable = results.filter((r) => r.geocoded && (r.confirmed || r.precision === 'street'));

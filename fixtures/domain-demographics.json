@@ -1,0 +1,11 @@
+{
+  "header": { "suburb": "Currimundi", "state": "QLD", "postcode": "4551" },
+  "demographics": [
+    { "type": "Tenure Type", "year": 2021, "items": [
+      { "label": "Owned outright", "value": 1180 },
+      { "label": "Owned with a mortgage", "value": 1425 },
+      { "label": "Rented", "value": 690 }
+    ]},
+    { "type": "Age", "year": 2021, "items": [ { "label": "60-69", "value": 540 } ] }
+  ]
+}

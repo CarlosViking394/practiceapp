@@ -1,4 +1,4 @@
-import { fetchSuburbs, fetchListings, fetchApiStatus, fetchVerification, sources, MODE } from './adapters/index.js';
+import { fetchSuburbs, fetchListings, fetchApiStatus, fetchVerification, fetchLiveStatus, sources, SOURCES, MODE } from './adapters/index.js';
 import { suburbMetrics, expansionPotential, matchesFilters } from './metrics.js';
 import { ANCHORS, DEFAULT_ANCHOR, DEFAULT_RADIUS_KM, anchorById, distanceFrom, coverage, round1 } from './geo.js';
 
@@ -11,6 +11,13 @@ const el = (tag, cls, html) => {
 };
 
 const money = (n) => (n == null ? 'Undisclosed' : '$' + Math.round(n / 1000).toLocaleString('en-AU') + 'k');
+
+/**
+ * Domain's displayableAddress already carries the suburb; the seed addresses do
+ * not. Append it only when it is missing, or live rows read "…, Currimundi, Currimundi".
+ */
+const fullAddress = (l, suburbName) =>
+  l.address?.toLowerCase().includes(suburbName.toLowerCase()) ? l.address : `${l.address}, ${suburbName}`;
 const pct = (n) => `${n}%`;
 
 /** Address-verification badge for a listing, or null if no report has been run. */
@@ -40,6 +47,7 @@ const state = {
   coverage: new Map(),
   verification: null,
   apiStatus: { google: 'unknown', mode: 'seed' },
+  liveStatus: { listings: 0, suburbs: 0, any: false },
   filters: {
     suburbId: 'all', status: 'all', minBeds: 4, minLot: 600,
     maxPrice: 0, requireStudy: false, requirePool: false, poolReady: true,
@@ -103,6 +111,7 @@ function suburbCard(s) {
       <span class="chip">${s.inventory.medianDom}d DOM</span>
       <span class="chip ${m.searchMonths > 12 ? 'warn' : m.searchMonths > 8 ? 'mid' : 'good'}">~${m.searchMonths}mo search</span>
       <span class="chip ${m.withdrawal.tone}">${m.withdrawal.label} withdrawal</span>
+      ${s.live ? `<span class="chip good" title="${s.liveFields.join(', ')}">${s.liveFields.length} live fields</span>` : ''}
       ${cov.partial
         ? `<span class="chip mid">${cov.inRange.length}/${cov.total} addresses in area</span>`
         : ''}
@@ -152,6 +161,11 @@ function openSuburb(s) {
            ${state.radiusKm}km radius — the suburb centre is ${cov.centroidKm}km out, so only part of it qualifies.</span>`
         : ''}
     </div>
+
+    ${s.live
+      ? `<p class="note" style="margin-bottom:16px">Live from Domain (${new Date(s.syncedAt).toLocaleDateString()}):
+         ${s.liveFields.map((f) => `<code>${f.split('.')[1]}</code>`).join(' ')}. Remaining figures are seed values.</p>`
+      : '<p class="note" style="margin-bottom:16px">No Domain sync has run for this suburb — every figure below is fabricated seed data.</p>'}
 
     <div class="sec">
       <h5>1 · Inventory & momentum</h5>
@@ -240,12 +254,13 @@ function listingRow(l) {
   const row = el('div', 'row');
   row.innerHTML = `
     <div>
-      <h4>${l.address}, ${s.name}</h4>
+      <h4>${fullAddress(l, s.name)}</h4>
       <div class="meta"><span class="dist">${km}km</span> from ${anchorById(state.anchor).label} · ${l.beds} bed · ${l.baths} bath · ${l.cars} car · ${l.lotSqm}m² lot · built ${l.yearBuilt}</div>
       <div class="chips row-chips">
         <span class="chip ${st.tone}">${st.label}</span>
         ${outside ? '<span class="chip warn">Outside search area</span>' : ''}
         ${verificationChip(l)}
+        ${l.source === 'domain' ? '<span class="chip good">Live · Domain</span>' : ''}
         <span class="chip ${e.poolVerdict.tone}">${e.poolVerdict.label}</span>
         <span class="chip ${e.extensionVerdict.tone}">${e.extensionVerdict.label}</span>
         ${l.inCatchment.length ? `<span class="chip good">${l.inCatchment.length} catchment${l.inCatchment.length > 1 ? 's' : ''}</span>` : ''}
@@ -392,21 +407,32 @@ function renderSources() {
        ${v.summary.drifted} with coordinates more than 500m off). Run at ${new Date(v.runAt).toLocaleString()}.`
     : 'No address verification has been run yet — <code>npm run verify:keyless</code>.';
 
+  const ls = state.liveStatus;
   panel.innerHTML = `
-    <div class="callout"><b>Google key:</b> ${g === 'configured'
-      ? 'configured — Places, Address Validation and Routes are live.'
-      : 'not configured. Copy <code>.env.example</code> to <code>.env</code>, add a key, and run <code>npm run start:live</code>.'}
+    <div class="callout" style="border-left-color:${ls.any ? 'var(--good)' : 'var(--warn)'}">
+      <b>Domain:</b> ${ls.any
+        ? `synced — ${ls.listings} live listings across ${ls.suburbs} suburbs${ls.syncedAt ? `, last run ${new Date(ls.syncedAt).toLocaleString()}` : ''}.`
+        : 'not synced. Add credentials to <code>.env</code> and run <code>npm run sync</code> to replace the fabricated listings with real ones.'}
     </div>
-    <div class="callout" style="border-left-color:var(--warn)"><b>Address verification:</b> ${verifyLine}</div>
-    <div class="callout"><b>Google cannot supply listings.</b> Prices, days on market, sale history, tenure,
-      owner-occupier ratios, lot dimensions, zoning and easements have no Google endpoint — they come from
-      Domain or PropTrack, the ABS, and council spatial services. Google covers address existence,
-      amenities and travel times.</div>`;
+    <div class="callout"><b>Google:</b> ${g === 'configured'
+      ? 'key configured — Places, Address Validation and Routes are live.'
+      : 'no key. Copy <code>.env.example</code> to <code>.env</code>, then <code>npm run start:live</code>.'}
+    </div>
+    <div class="callout" style="border-left-color:var(--warn)"><b>Address verification:</b> ${verifyLine}</div>`;
   sources.forEach((src) => {
+    const state_ = src.wired
+      ? (src.key === 'listings' || src.key === 'performance' || src.key === 'sales' || src.key === 'demography'
+        ? (state.liveStatus.any ? { label: 'Live', tone: 'good' } : { label: 'Wired · not synced', tone: 'mid' })
+        : { label: 'Wired', tone: 'mid' })
+      : { label: 'No source wired', tone: 'warn' };
     panel.appendChild(el('div', 'src', `
       <div><b>${src.label}</b><div class="vendor">${src.vendor}</div></div>
-      <span class="chip ${src.live ? 'good' : 'mid'}">${src.live ? 'Live' : 'Seed data'}</span>`));
+      <span class="chip ${state_.tone}">${state_.label}</span>`));
   });
+
+  panel.appendChild(el('p', 'note',
+    'Fields with no source wired keep their seed values. Withdrawal rate and coming-soon inventory ' +
+    'have no public API at all — they need an agency CRM feed.'));
 }
 
 // ---------------------------------------------------------------------------
@@ -496,23 +522,29 @@ function bind() {
 
 async function init() {
   $('#mode-pill').textContent = 'Seed data';
-  const [suburbs, listings, apiStatus, verification] = await Promise.all([
-    fetchSuburbs(), fetchListings(), fetchApiStatus(), fetchVerification(),
+  const [suburbs, listings, apiStatus, verification, liveStatus] = await Promise.all([
+    fetchSuburbs(), fetchListings(), fetchApiStatus(), fetchVerification(), fetchLiveStatus(),
   ]);
   state.suburbs = suburbs;
   state.listings = listings;
   state.apiStatus = apiStatus;
   state.verification = verification;
+  state.liveStatus = liveStatus;
   $('#a-anchor').innerHTML = ANCHORS
     .map((a) => `<option value="${a.id}"${a.id === state.anchor ? ' selected' : ''}>${a.label}</option>`)
     .join('');
   $('#a-radius').value = String(state.radiusKm);
 
   const confirmed = verification?.summary.confirmed ?? 0;
-  $('#mode-pill').textContent = verification
-    ? `Seed data · ${confirmed}/${verification.summary.total} addresses verified`
-    : 'Seed data · addresses unverified';
-  $('#mode-pill').className = 'mode' + (confirmed === 0 ? ' mode-warn' : '');
+  if (liveStatus.any) {
+    $('#mode-pill').textContent = `Live · ${liveStatus.listings} Domain listings`;
+    $('#mode-pill').className = 'mode mode-good';
+  } else {
+    $('#mode-pill').textContent = verification
+      ? `Seed data · ${confirmed}/${verification.summary.total} addresses verified`
+      : 'Seed data · not synced';
+    $('#mode-pill').className = 'mode mode-warn';
+  }
 
   recomputeArea();
 

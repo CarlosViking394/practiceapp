@@ -15,6 +15,43 @@
 
 import { suburbs, suburbById } from '../data/suburbs.js';
 import { listings } from '../data/listings.js';
+import { FIELD_SOURCES, SOURCES } from '../data/provenance.js';
+
+export { FIELD_SOURCES, SOURCES };
+
+/**
+ * Live data written by scripts/sync-domain.mjs, if it has been run.
+ * Absent until then — the app falls back to seed data per suburb, so a partial
+ * sync degrades field by field instead of all at once.
+ */
+async function loadLive(name) {
+  try {
+    const res = await fetch(`/src/data/live/${name}.json`);
+    if (!res.ok) return null;
+    return await res.json();
+  } catch {
+    return null;
+  }
+}
+
+/** Merge live suburb figures over the seed record, field by field. */
+function mergeSuburb(seed, live) {
+  if (!live) return { ...seed, live: false, liveFields: [] };
+  const liveFields = [];
+  const inventory = { ...seed.inventory };
+  for (const [k, v] of Object.entries(live.performance ?? {})) {
+    if (v != null && k in inventory) { inventory[k] = v; liveFields.push(`inventory.${k}`); }
+  }
+  const tenure = { ...seed.tenure };
+  for (const [k, v] of Object.entries(live.demographics ?? {})) {
+    if (v != null && k in tenure) { tenure[k] = v; liveFields.push(`tenure.${k}`); }
+  }
+  if (live.performance?.avgTenureYears != null) {
+    tenure.avgTenureYears = live.performance.avgTenureYears;
+    liveFields.push('tenure.avgTenureYears');
+  }
+  return { ...seed, inventory, tenure, live: liveFields.length > 0, liveFields, syncedAt: live.syncedAt ?? null };
+}
 
 /** Set to 'live' once credentials are wired in; 'seed' reads the bundled data. */
 export const MODE = 'seed';
@@ -57,25 +94,49 @@ export async function fetchVerification() {
 const delay = (ms) => new Promise((r) => setTimeout(r, ms));
 
 export const sources = [
-  { key: 'listings', label: 'Active & coming-soon listings', vendor: 'Domain Developer Portal', live: false },
-  { key: 'signals', label: 'Early intent signals', vendor: 'Agency CRM + inspection bookings', live: false },
-  { key: 'sales', label: 'Historical sales & tenure', vendor: 'Domain sales history', live: false },
-  { key: 'demography', label: 'Owner-occupier vs investor', vendor: 'ABS Census', live: false },
-  { key: 'spatial', label: 'Lots, zoning & easements', vendor: 'Council spatial services', live: false },
-  { key: 'schools', label: 'School catchments', vendor: 'QLD EdMap', live: false },
-  { key: 'amenities', label: 'Parks, footpaths & beach access', vendor: 'OSM / council GIS', live: false },
+  { key: 'listings', label: 'Active listings, price, DOM', vendor: 'Domain — Agents & Listings', wired: true },
+  { key: 'performance', label: 'Median price & days on market', vendor: 'Domain — Suburb Performance', wired: true },
+  { key: 'sales', label: 'Sale history & tenure', vendor: 'Domain — Properties', wired: true },
+  { key: 'demography', label: 'Owner-occupier ratio', vendor: 'Domain — Demographics (ABS)', wired: true },
+  { key: 'addresses', label: 'Address verification', vendor: 'Google — Geocoding / Address Validation', wired: true },
+  { key: 'amenities', label: 'Parks, playgrounds, childcare', vendor: 'Google — Places', wired: true },
+  { key: 'signals', label: 'Coming-soon & early intent', vendor: 'Agency CRM — no public API', wired: false },
+  { key: 'spatial', label: 'Zoning, easements, slope', vendor: 'Council spatial services', wired: false },
+  { key: 'schools', label: 'School catchment boundaries', vendor: 'QLD EdMap', wired: false },
+  { key: 'vacancy', label: 'Rental vacancy rate', vendor: 'SQM Research / REIQ', wired: false },
 ];
 
 export async function fetchSuburbs() {
-  if (MODE === 'live') throw new Error('Live suburb feed not configured — see src/adapters/index.js');
-  await delay(120); // keep callers honest about this being async
-  return suburbs;
+  const live = await loadLive('suburbs');
+  return suburbs.map((s) => mergeSuburb(s, live?.[s.id]));
 }
 
+/**
+ * Live listings replace the seeded ones for any suburb that synced, rather than
+ * being merged into them — a real listing and an invented one are not two
+ * versions of the same property.
+ */
 export async function fetchListings({ suburbId } = {}) {
-  if (MODE === 'live') throw new Error('Live listing feed not configured — see src/adapters/index.js');
-  await delay(120);
-  return suburbId && suburbId !== 'all' ? listings.filter((l) => l.suburbId === suburbId) : listings;
+  const live = await loadLive('listings');
+  let all = listings;
+
+  if (live?.length) {
+    const syncedSuburbs = new Set(live.map((l) => l.suburbId));
+    all = [...live, ...listings.filter((l) => !syncedSuburbs.has(l.suburbId))];
+  }
+  return suburbId && suburbId !== 'all' ? all.filter((l) => l.suburbId === suburbId) : all;
+}
+
+/** Has a Domain sync produced any live data? */
+export async function fetchLiveStatus() {
+  const [ls, ss] = await Promise.all([loadLive('listings'), loadLive('suburbs')]);
+  const syncedSuburbs = ss ? Object.values(ss).filter((v) => v.performance || v.demographics).length : 0;
+  return {
+    listings: ls?.length ?? 0,
+    suburbs: syncedSuburbs,
+    syncedAt: ss ? Object.values(ss)[0]?.syncedAt ?? null : null,
+    any: Boolean(ls?.length || syncedSuburbs),
+  };
 }
 
 export async function fetchSuburb(id) {

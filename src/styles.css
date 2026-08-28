@@ -185,3 +185,5 @@ ul.plain li { margin-bottom: 5px; }
 
 .mode-warn { color: var(--warn); border-color: color-mix(in srgb, var(--warn) 45%, var(--line)); }
 code { font-size: 12px; background: var(--panel-2); padding: 1px 5px; border-radius: 4px; }
+
+.mode-good { color: var(--good); border-color: color-mix(in srgb, var(--good) 45%, var(--line)); }

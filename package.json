@@ -9,7 +9,10 @@
     "start:live": "node --env-file=.env server.js",
     "verify": "node --env-file=.env scripts/verify-addresses.mjs",
     "verify:keyless": "node scripts/verify-addresses.mjs --provider=nominatim",
-    "enrich": "node --env-file=.env scripts/enrich-amenities.mjs"
+    "enrich": "node --env-file=.env scripts/enrich-amenities.mjs",
+    "sync": "node --env-file=.env scripts/sync-domain.mjs",
+    "sync:tenure": "node --env-file=.env scripts/sync-domain.mjs --tenure",
+    "test": "node scripts/test-normalisers.mjs"
   },
   "engines": {
     "node": ">=20"

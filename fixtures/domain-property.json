@@ -1,0 +1,9 @@
+{
+  "id": "QQ-1234",
+  "address": "31 Buderim Street, Currimundi QLD 4551",
+  "saleHistory": [
+    { "saleDate": "2012-05-11", "price": 498000 },
+    { "saleDate": "2004-09-02", "price": 285000 },
+    { "saleDate": "1998-03-19", "price": 141000 }
+  ]
+}
